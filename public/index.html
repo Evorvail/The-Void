@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE VOID</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&display=swap');
+        body { font-family: 'JetBrains Mono', monospace; background-color: #050505; color: #e5e5e5; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #222; }
+    </style>
+</head>
+<body class="h-screen flex flex-col justify-between p-6">
+
+    <header class="border-b border-neutral-900 pb-4 flex justify-between items-center">
+        <h1 class="text-xl font-bold tracking-widest text-neutral-400">THE_VOID //</h1>
+        <div id="status-tag" class="text-xs px-2 py-1 bg-red-950 text-red-400 border border-red-900 rounded">UNVERIFIED</div>
+    </header>
+
+    <main class="flex-1 flex flex-col my-6 max-w-4xl w-full mx-auto justify-center">
+        
+        <div id="entrance-view" class="space-y-6 text-center max-w-md mx-auto">
+            <p class="text-sm text-neutral-500">No logs. No emails. Pure anonymity. Survive the vibe check to enter the sanctuary.</p>
+            <button id="generate-btn" class="w-full bg-neutral-900 hover:bg-neutral-800 text-white py-3 border border-neutral-800 rounded tracking-wider transition">GENERATE NEW PRIVATE KEY</button>
+            <div class="relative flex py-2 items-center">
+                <div class="flex-grow border-t border-neutral-900"></div>
+                <span class="flex-shrink mx-4 text-neutral-600 text-xs">OR RE-ENTER WITH KEY</span>
+                <div class="flex-grow border-t border-neutral-900"></div>
+            </div>
+            <input type="text" id="login-key-input" placeholder="Paste your private key here..." class="w-full bg-black border border-neutral-900 p-3 rounded text-sm focus:outline-none focus:border-neutral-700 text-center">
+            <button id="login-btn" class="w-full bg-white text-black font-bold py-2 rounded text-sm tracking-wider hover:bg-neutral-200 transition">ACCESS VOID</button>
+        </div>
+
+        <div id="backup-view" class="hidden space-y-6 text-center max-w-md mx-auto">
+            <p class="text-sm text-amber-500 font-bold">⚠️ COPY AND SAVE THIS KEY NOW. IF YOU LOSE IT, YOUR ACCOUNT IS GONE FOREVER.</p>
+            <div id="key-display" class="bg-neutral-950 border border-neutral-900 p-4 rounded text-xs select-all break-all text-neutral-300 tracking-mono"></div>
+            <button id="acknowledge-btn" class="w-full bg-neutral-900 border border-neutral-800 py-2 rounded text-sm hover:bg-neutral-800 transition">I HAVE SAVED IT, PROCEED TO TRIAL</button>
+        </div>
+
+        <div id="chat-view" class="hidden flex-1 flex flex-col border border-neutral-900 rounded bg-black/40">
+            <div id="chat-messages" class="flex-1 p-4 overflow-y-auto space-y-4 text-sm max-h-[60vh]"></div>
+            <div class="border-t border-neutral-900 p-3 flex gap-2">
+                <input type="text" id="msg-input" placeholder="Say something with brutal honesty..." class="flex-1 bg-neutral-950 border border-neutral-900 p-3 rounded text-sm focus:outline-none focus:border-neutral-700">
+                <button id="send-btn" class="bg-neutral-900 border border-neutral-800 px-6 rounded hover:bg-neutral-800 transition text-sm">SEND</button>
+            </div>
+        </div>
+
+    </main>
+
+    <script src="/app.js"></script>
+</body>
+</html>
