@@ -1,39 +1,116 @@
 const socket = io();
-let myPrivateKey = null;
+let myUsername = null;
 
-const entranceView = document.getElementById('entrance-view');
-const backupView = document.getElementById('backup-view');
+const loginView = document.getElementById('login-view');
 const chatView = document.getElementById('chat-view');
-const keyDisplay = document.getElementById('key-display');
 const chatMessages = document.getElementById('chat-messages');
 const msgInput = document.getElementById('msg-input');
-const statusTag = document.getElementById('status-tag');
+const imageUpload = document.getElementById('image-upload');
+const roomTitle = document.getElementById('room-title');
+const roomStatus = document.getElementById('room-status');
+const myUsernameDisplay = document.getElementById('my-username-display');
 
-document.getElementById('generate-btn').addEventListener('click', () => {
-    socket.emit('request_identity');
+// 1. LOGIN LOGIC
+document.getElementById('login-btn').addEventListener('click', attemptLogin);
+document.getElementById('username-input').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') attemptLogin();
 });
 
-socket.on('identity_generated', (key) => {
-    myPrivateKey = key;
-    keyDisplay.innerText = key;
-    entranceView.classList.add('hidden');
-    backupView.classList.remove('hidden');
-});
+function attemptLogin() {
+    const rawName = document.getElementById('username-input').value.trim();
+    if (!rawName) return;
+    myUsername = rawName;
+    socket.emit('login', myUsername);
+}
 
-document.getElementById('acknowledge-btn').addEventListener('click', () => {
-    backupView.classList.add('hidden');
+socket.on('auth_success', ({ status, username }) => {
+    loginView.classList.add('hidden');
     chatView.classList.remove('hidden');
-    appendSystemMessage("GATEKEEPER: Welcome candidate. Explain yourself in one or a few messages. Who are you, and what is your meaning of life?");
-});
-
-document.getElementById('login-btn').addEventListener('click', () => {
-    const enteredKey = document.getElementById('login-key-input').value.trim();
-    if(enteredKey) {
-        myPrivateKey = enteredKey;
-        socket.emit('auth_with_key', enteredKey);
+    chatView.classList.add('flex'); // Keep it flex for the layout
+    myUsernameDisplay.innerText = `@${username}`;
+    
+    if (status === 'approved') {
+        roomTitle.innerText = "Global Sanctuary";
+        roomStatus.innerText = "Anonymous Group Chat";
     }
 });
 
+// 2. SENDING MESSAGES & IMAGES
+const sendMessage = (text, type = 'text') => {
+    if (!myUsername) return;
+    
+    // Auto-detect if they pasted an image/gif URL
+    if (type === 'text' && text.match(/\.(jpeg|jpg|gif|png)$/i) != null) {
+        type = 'image';
+    }
+
+    socket.emit('send_message', { username: myUsername, message: text, type });
+};
+
+document.getElementById('send-btn').addEventListener('click', () => {
+    if (msgInput.value.trim()) {
+        sendMessage(msgInput.value.trim());
+        msgInput.value = '';
+    }
+});
+
+msgInput.addEventListener('keypress', (e) => { 
+    if (e.key === 'Enter' && msgInput.value.trim()) {
+        sendMessage(msgInput.value.trim());
+        msgInput.value = '';
+    } 
+});
+
+// Handle local image uploads
+imageUpload.addEventListener('change', function() {
+    const file = this.files[0];
+    if (file) {
+        if (file.size > 5000000) {
+            alert("File is too big! Keep it under 5MB.");
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            sendMessage(e.target.result, 'image');
+        };
+        reader.readAsDataURL(file);
+    }
+});
+
+// 3. RECEIVING MESSAGES
+socket.on('receive_message', ({ sender, text, type }) => {
+    appendBubble(sender, text, type, sender === 'You');
+});
+
+socket.on('sanctuary_message', ({ sender, text, type }) => {
+    appendBubble(sender, text, type, sender === myUsername);
+});
+
+// 4. RENDER WHATSAPP BUBBLES
+function appendBubble(sender, content, type, isMe) {
+    const wrapper = document.createElement('div');
+    wrapper.className = `flex w-full ${isMe ? 'justify-end' : 'justify-start'}`;
+    
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    let mediaContent = '';
+    if (type === 'image') {
+        mediaContent = `<img src="${content}" class="rounded-lg max-w-full h-auto mb-1 max-h-64 object-contain">`;
+    } else {
+        mediaContent = `<p class="text-sm break-words">${content}</p>`;
+    }
+
+    wrapper.innerHTML = `
+        <div class="max-w-[75%] px-3 py-2 flex flex-col relative shadow-sm ${isMe ? 'bubble-out text-white' : 'bubble-in text-gray-100'}">
+            ${!isMe ? `<span class="text-xs font-bold text-[#53bdeb] mb-1">${sender}</span>` : ''}
+            ${mediaContent}
+            <span class="text-[10px] text-gray-400 self-end mt-1">${time}</span>
+        </div>
+    `;
+    
+    chatMessages.appendChild(wrapper);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
 socket.on('auth_success', ({ status }) => {
     entranceView.classList.add('hidden');
     chatView.classList.remove('hidden');
