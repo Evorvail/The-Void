@@ -3,37 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>THE VOID</title>
+    <title>The Sanctuary</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&display=swap');
-        body { font-family: 'JetBrains Mono', monospace; background-color: #050505; color: #e5e5e5; }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb { background: #222; }
+        body { background-color: #0b141a; color: #e9edef; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        .bg-chat { background-color: #0b141a; background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); background-blend-mode: overlay; opacity: 0.9; }
+        .bubble-in { background-color: #202c33; border-radius: 0 8px 8px 8px; }
+        .bubble-out { background-color: #005c4b; border-radius: 8px 0 8px 8px; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #374045; border-radius: 10px; }
     </style>
 </head>
-<body class="h-screen flex flex-col justify-between p-6">
+<body class="h-screen flex flex-col justify-center items-center p-0 md:p-4 bg-neutral-900">
 
-    <header class="border-b border-neutral-900 pb-4 flex justify-between items-center">
-        <h1 class="text-xl font-bold tracking-widest text-neutral-400">THE_VOID //</h1>
-        <div id="status-tag" class="text-xs px-2 py-1 bg-red-950 text-red-400 border border-red-900 rounded">UNVERIFIED</div>
-    </header>
+    <div id="login-view" class="w-full max-w-md p-8 bg-[#111b21] rounded-lg shadow-xl text-center space-y-6">
+        <h1 class="text-3xl font-bold text-[#25D366] mb-2">Sanctuary</h1>
+        <p class="text-sm text-neutral-400">Enter an anonymous username to begin.</p>
+        <input type="text" id="username-input" placeholder="e.g. shadow_ninja" class="w-full bg-[#2a3942] text-white p-3 rounded focus:outline-none focus:ring-2 focus:ring-[#00a884]">
+        <button id="login-btn" class="w-full bg-[#00a884] text-white font-bold py-3 rounded hover:bg-[#008f6f] transition">ENTER</button>
+    </div>
 
-    <main class="flex-1 flex flex-col my-6 max-w-4xl w-full mx-auto justify-center">
+    <div id="chat-view" class="hidden w-full max-w-2xl h-full md:h-[90vh] bg-[#111b21] flex flex-col md:rounded-lg overflow-hidden shadow-2xl">
         
-        <div id="entrance-view" class="space-y-6 text-center max-w-md mx-auto">
-            <p class="text-sm text-neutral-500">No logs. No emails. Pure anonymity. Survive the vibe check to enter the sanctuary.</p>
-            <button id="generate-btn" class="w-full bg-neutral-900 hover:bg-neutral-800 text-white py-3 border border-neutral-800 rounded tracking-wider transition">GENERATE NEW PRIVATE KEY</button>
-            <div class="relative flex py-2 items-center">
-                <div class="flex-grow border-t border-neutral-900"></div>
-                <span class="flex-shrink mx-4 text-neutral-600 text-xs">OR RE-ENTER WITH KEY</span>
-                <div class="flex-grow border-t border-neutral-900"></div>
+        <header class="bg-[#202c33] p-4 flex items-center justify-between z-10 border-b border-neutral-800">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-neutral-600 rounded-full flex items-center justify-center overflow-hidden">
+                    <img src="https://api.dicebear.com/7.x/identicon/svg?seed=sanctuary" alt="Group Icon">
+                </div>
+                <div>
+                    <h2 id="room-title" class="font-bold text-lg leading-tight">Gatekeeper Trial</h2>
+                    <p id="room-status" class="text-xs text-[#00a884]">You are being interviewed...</p>
+                </div>
             </div>
-            <input type="text" id="login-key-input" placeholder="Paste your private key here..." class="w-full bg-black border border-neutral-900 p-3 rounded text-sm focus:outline-none focus:border-neutral-700 text-center">
-            <button id="login-btn" class="w-full bg-white text-black font-bold py-2 rounded text-sm tracking-wider hover:bg-neutral-200 transition">ACCESS VOID</button>
-        </div>
+            <div id="my-username-display" class="text-xs bg-[#2a3942] px-3 py-1 rounded-full text-neutral-300"></div>
+        </header>
 
+        <div id="chat-messages" class="flex-1 p-4 overflow-y-auto space-y-3 bg-chat flex flex-col">
+            </div>
+
+        <div class="bg-[#202c33] p-3 flex items-center gap-2 z-10">
+            <label class="cursor-pointer text-neutral-400 hover:text-white p-2">
+                <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                <input type="file" id="image-upload" accept="image/*" class="hidden">
+            </label>
+            
+            <input type="text" id="msg-input" placeholder="Type a message or paste a GIF link..." class="flex-1 bg-[#2a3942] text-white p-3 rounded-lg focus:outline-none text-sm">
+            
+            <button id="send-btn" class="bg-[#00a884] text-white p-3 rounded-full hover:bg-[#008f6f] transition flex items-center justify-center">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>
+            </button>
+        </div>
+    </div>
+
+    <script src="/app.js"></script>
+</body>
+</html>
         <div id="backup-view" class="hidden space-y-6 text-center max-w-md mx-auto">
             <p class="text-sm text-amber-500 font-bold">⚠️ COPY AND SAVE THIS KEY NOW. IF YOU LOSE IT, YOUR ACCOUNT IS GONE FOREVER.</p>
             <div id="key-display" class="bg-neutral-950 border border-neutral-900 p-4 rounded text-xs select-all break-all text-neutral-300 tracking-mono"></div>
