@@ -1,5 +1,4 @@
 const express = require('express');
-const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
@@ -10,11 +9,11 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
-
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Now we track the user's 'stage' in the interview and their total word count
+// THE MEMORY BANKS
 const users = new Map();
+const sanctuaryHistory = []; // <-- NEW: Stores the global chat history
 
 const gatekeeperQuestions = [
     "Interesting. Tell me, what's a hill you're willing to die on?",
@@ -34,6 +33,76 @@ io.on('connection', (socket) => {
             users.get(key).socketId = socket.id;
             const status = users.get(key).approved ? 'approved' : 'pending';
             socket.emit('auth_success', { status });
+            
+            // NEW: If they log back in and are approved, dump the chat history so it doesn't look dead
+            if (status === 'approved') {
+                sanctuaryHistory.forEach(msg => {
+                    socket.emit('sanctuary_message', msg);
+                });
+            }
+        } else {
+            users.set(key, { socketId: socket.id, approved: false, stage: 0, totalScore: 0 });
+            socket.emit('auth_success', { status: 'pending' });
+        }
+    });
+
+    socket.on('send_message', ({ key, message }) => {
+        const user = users.get(key);
+        if (!user) return;
+
+        if (!user.approved) {
+            // ECHO USER MESSAGE
+            socket.emit('receive_message', { sender: 'You', text: message });
+            
+            // SCORING
+            user.totalScore += message.length;
+            if (message.toLowerCase().includes('respect') || message.toLowerCase().includes('truth')) {
+                user.totalScore += 20; 
+            }
+
+            setTimeout(() => {
+                if (user.stage < gatekeeperQuestions.length) {
+                    let botReply = gatekeeperQuestions[user.stage];
+                    socket.emit('receive_message', { sender: 'GATEKEEPER', text: botReply });
+                    user.stage++;
+                } else {
+                    if (user.totalScore > 80) {
+                        user.approved = true;
+                        socket.emit('receive_message', { sender: 'GATEKEEPER', text: "[APPROVE] Vibe check passed. Your words carry weight. Welcome to the Sanctuary." });
+                        socket.emit('auth_success', { status: 'approved' });
+                        
+                        // NEW: Dump history when they first get approved
+                        setTimeout(() => {
+                            sanctuaryHistory.forEach(msg => {
+                                socket.emit('sanctuary_message', msg);
+                            });
+                        }, 500);
+
+                    } else {
+                        user.stage = 0; 
+                        user.totalScore = 0;
+                        socket.emit('receive_message', { sender: 'GATEKEEPER', text: "[REJECT] Your answers lack depth. Let's try this again from the top. Who are you?" });
+                    }
+                }
+            }, 1500);
+
+        } else {
+            // MAIN SANCTUARY CHAT
+            const truncatedKey = `Anon_${key.substring(0, 6)}`;
+            const chatObj = { sender: truncatedKey, text: message };
+            
+            // NEW: Save to history and keep max 100 messages
+            sanctuaryHistory.push(chatObj);
+            if (sanctuaryHistory.length > 100) sanctuaryHistory.shift(); 
+            
+            io.emit('sanctuary_message', chatObj);
+        }
+    });
+});
+
+server.listen(PORT, () => {
+    console.log(`The Void is alive on port ${PORT}`);
+});
         } else {
             users.set(key, { socketId: socket.id, approved: false, stage: 0, totalScore: 0 });
             socket.emit('auth_success', { status: 'pending' });
