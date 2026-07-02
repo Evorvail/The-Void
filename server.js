@@ -1,4 +1,5 @@
 const express = require('express');
+const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
@@ -12,12 +13,19 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Now we track the user's 'stage' in the interview and their total word count
 const users = new Map();
+
+const gatekeeperQuestions = [
+    "Interesting. Tell me, what's a hill you're willing to die on?",
+    "If absolute anonymity usually brings out the worst in people, why are you seeking it out here?",
+    "Final question: What does a meaningful life look like to you in a world driven by superficial metrics?"
+];
 
 io.on('connection', (socket) => {
     socket.on('request_identity', () => {
         const privateKey = crypto.randomBytes(16).toString('hex');
-        users.set(privateKey, { socketId: socket.id, approved: false });
+        users.set(privateKey, { socketId: socket.id, approved: false, stage: 0, totalScore: 0 });
         socket.emit('identity_generated', privateKey);
     });
 
@@ -27,7 +35,7 @@ io.on('connection', (socket) => {
             const status = users.get(key).approved ? 'approved' : 'pending';
             socket.emit('auth_success', { status });
         } else {
-            users.set(key, { socketId: socket.id, approved: false });
+            users.set(key, { socketId: socket.id, approved: false, stage: 0, totalScore: 0 });
             socket.emit('auth_success', { status: 'pending' });
         }
     });
@@ -37,21 +45,39 @@ io.on('connection', (socket) => {
         if (!user) return;
 
         if (!user.approved) {
+            // Echo user message to UI
             socket.emit('receive_message', { sender: 'You', text: message });
 
+            // Add points to their score based on message length and keywords
+            user.totalScore += message.length;
+            if (message.toLowerCase().includes('respect') || message.toLowerCase().includes('truth')) {
+                user.totalScore += 20; 
+            }
+
             setTimeout(() => {
-                let botReply = "Interesting choice of words. Tell me, how do you handle someone completely destroying your argument without losing your mind?";
-                
-                if (message.toLowerCase().includes('respect') || message.length > 50) {
-                    user.approved = true;
-                    socket.emit('receive_message', { sender: 'GATEKEEPER', text: "Vibe check passed. Welcome to the Sanctuary. You have been approved." });
-                    socket.emit('auth_success', { status: 'approved' });
-                } else {
+                // If they haven't answered all questions yet...
+                if (user.stage < gatekeeperQuestions.length) {
+                    let botReply = gatekeeperQuestions[user.stage];
                     socket.emit('receive_message', { sender: 'GATEKEEPER', text: botReply });
+                    user.stage++;
+                } 
+                // If the interview is over, make a decision
+                else {
+                    if (user.totalScore > 80) {
+                        user.approved = true;
+                        socket.emit('receive_message', { sender: 'GATEKEEPER', text: "[APPROVE] Vibe check passed. Your words carry weight. Welcome to the Sanctuary." });
+                        socket.emit('auth_success', { status: 'approved' });
+                    } else {
+                        // Reset them if they gave short/lazy answers
+                        user.stage = 0; 
+                        user.totalScore = 0;
+                        socket.emit('receive_message', { sender: 'GATEKEEPER', text: "[REJECT] Your answers lack depth. Let's try this again from the top. Who are you?" });
+                    }
                 }
             }, 1500);
 
         } else {
+            // Main Sanctuary Chat Room logic
             const truncatedKey = `Anon_${key.substring(0, 6)}`;
             io.emit('sanctuary_message', { sender: truncatedKey, text: message });
         }
