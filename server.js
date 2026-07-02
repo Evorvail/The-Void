@@ -2,38 +2,99 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
-const crypto = require('crypto');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+// Increase limit for image uploads
+const io = new Server(server, { maxHttpBufferSize: 5e6 }); // 5MB limit
 
 const PORT = process.env.PORT || 3000;
 app.use(express.static(path.join(__dirname, 'public')));
 
 // THE MEMORY BANKS
 const users = new Map();
-const sanctuaryHistory = []; // <-- NEW: Stores the global chat history
+const sanctuaryHistory = []; 
 
 const gatekeeperQuestions = [
     "Interesting. Tell me, what's a hill you're willing to die on?",
     "If absolute anonymity usually brings out the worst in people, why are you seeking it out here?",
-    "Final question: What does a meaningful life look like to you in a world driven by superficial metrics?"
+    "Final question: What does a meaningful life look like to you?"
 ];
 
 io.on('connection', (socket) => {
-    socket.on('request_identity', () => {
-        const privateKey = crypto.randomBytes(16).toString('hex');
-        users.set(privateKey, { socketId: socket.id, approved: false, stage: 0, totalScore: 0 });
-        socket.emit('identity_generated', privateKey);
+    
+    // REDDIT-STYLE LOGIN
+    socket.on('login', (username) => {
+        const cleanName = username.trim().substring(0, 15);
+        
+        if (users.has(cleanName)) {
+            // Returning user
+            const user = users.get(cleanName);
+            user.socketId = socket.id;
+            socket.emit('auth_success', { status: user.approved ? 'approved' : 'pending', username: cleanName });
+            
+            if (user.approved) {
+                sanctuaryHistory.forEach(msg => socket.emit('sanctuary_message', msg));
+            }
+        } else {
+            // New user
+            users.set(cleanName, { socketId: socket.id, approved: false, stage: 0, totalScore: 0 });
+            socket.emit('auth_success', { status: 'pending', username: cleanName });
+            socket.emit('receive_message', { sender: 'Gatekeeper', text: "Welcome to the trial. Explain yourself. Who are you?", type: 'text' });
+        }
     });
 
-    socket.on('auth_with_key', (key) => {
-        if (users.has(key)) {
-            users.get(key).socketId = socket.id;
-            const status = users.get(key).approved ? 'approved' : 'pending';
-            socket.emit('auth_success', { status });
+    socket.on('send_message', ({ username, message, type }) => {
+        const user = users.get(username);
+        if (!user) return;
+
+        if (!user.approved) {
+            // ECHO USER MESSAGE
+            socket.emit('receive_message', { sender: 'You', text: message, type });
             
+            // Only score text, not images
+            if (type === 'text') {
+                user.totalScore += message.length;
+                if (message.toLowerCase().includes('respect') || message.toLowerCase().includes('truth')) {
+                    user.totalScore += 20; 
+                }
+            }
+
+            setTimeout(() => {
+                if (user.stage < gatekeeperQuestions.length) {
+                    socket.emit('receive_message', { sender: 'Gatekeeper', text: gatekeeperQuestions[user.stage], type: 'text' });
+                    user.stage++;
+                } else {
+                    if (user.totalScore > 50) {
+                        user.approved = true;
+                        socket.emit('receive_message', { sender: 'Gatekeeper', text: "Vibe check passed. Welcome to the group chat.", type: 'text' });
+                        socket.emit('auth_success', { status: 'approved', username });
+                        
+                        setTimeout(() => {
+                            sanctuaryHistory.forEach(msg => socket.emit('sanctuary_message', msg));
+                        }, 500);
+                    } else {
+                        user.stage = 0; 
+                        user.totalScore = 0;
+                        socket.emit('receive_message', { sender: 'Gatekeeper', text: "Not deep enough. Let's try again. Who are you really?", type: 'text' });
+                    }
+                }
+            }, 1000);
+
+        } else {
+            // MAIN SANCTUARY CHAT
+            const chatObj = { sender: username, text: message, type };
+            sanctuaryHistory.push(chatObj);
+            if (sanctuaryHistory.length > 100) sanctuaryHistory.shift(); 
+            
+            io.emit('sanctuary_message', chatObj);
+        }
+    });
+});
+
+server.listen(PORT, () => {
+    console.log(`The Void is alive on port ${PORT}`);
+});
             // NEW: If they log back in and are approved, dump the chat history so it doesn't look dead
             if (status === 'approved') {
                 sanctuaryHistory.forEach(msg => {
